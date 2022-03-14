@@ -2,6 +2,7 @@
 
 #include <vector>
 #include <iostream>
+#include <cassert>
 
 using namespace std;
 
@@ -31,6 +32,7 @@ template<typename It>
 class Paginator {
 public:
     explicit Paginator(It range_begin, It range_end, size_t page_size) {
+        assert(range_end >= range_begin && page_size > 0);
         tot_results_ = distance(range_begin, range_end);
         tot_pages_ = IntCeiling(tot_results_, page_size);
         for (size_t i = 0; i < tot_pages_; ++i) {

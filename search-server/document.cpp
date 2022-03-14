@@ -1,6 +1,10 @@
 #include "document.h"
 #include <stdexcept>
 
+
+Document::Document(int a, double b, int c)
+        : id{a}, relevance{b}, rating{c} {}
+
 ostream &operator<<(ostream &os, const Document &document) {
     os << "{ "s
        << "document_id = "s << document.id << ", "s

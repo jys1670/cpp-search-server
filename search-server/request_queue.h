@@ -6,31 +6,16 @@
 
 class RequestQueue {
 public:
-    explicit RequestQueue(const SearchServer &search_server) : search_server_{search_server}, empty_requests_{0},
-                                                               current_time_{0} {};
+    explicit RequestQueue(const SearchServer &search_server);
 
     template<typename DocumentFilter>
-    vector<Document> AddFindRequest(const string &raw_query, DocumentFilter doc_filter) {
-        const auto result = search_server_.FindTopDocuments(raw_query, doc_filter);
-        AddRequest(result.size());
-        return result;
-    }
+    vector<Document> AddFindRequest(const string &raw_query, DocumentFilter doc_filter);
 
-    vector<Document> AddFindRequest(const string &raw_query, DocumentStatus status) {
-        const auto result = search_server_.FindTopDocuments(raw_query, status);
-        AddRequest(result.size());
-        return result;
-    }
+    vector<Document> AddFindRequest(const string &raw_query, DocumentStatus status);
 
-    vector<Document> AddFindRequest(const string &raw_query) {
-        const auto result = search_server_.FindTopDocuments(raw_query);
-        AddRequest(result.size());
-        return result;
-    }
+    vector<Document> AddFindRequest(const string &raw_query);
 
-    int GetNoResultRequests() const {
-        return empty_requests_;
-    }
+    int GetNoResultRequests() const;
 
 private:
     const SearchServer &search_server_;
@@ -45,3 +30,10 @@ private:
 
     void AddRequest(int results_num);
 };
+
+template<typename DocumentFilter>
+vector<Document> RequestQueue::AddFindRequest(const string &raw_query, DocumentFilter doc_filter) {
+    const auto result = search_server_.FindTopDocuments(raw_query, doc_filter);
+    AddRequest(result.size());
+    return result;
+}

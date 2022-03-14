@@ -71,23 +71,11 @@ private:
 
     static int ComputeAverageRating(const vector<int> &ratings);
 
-    double ComputeWordInvDocFreq(const string &word) const {
-        double docs_with_word = word_to_docs_freq_.at(word).size();
-        return log(total_docs_ / docs_with_word);
-    }
+    double ComputeWordInvDocFreq(const string &word) const;
 
-    bool IsStopWord(const string &word) const {
-        return stop_words_.count(word) > 0;
-    }
+    bool IsStopWord(const string &word) const;
 
-    static bool ContainsSpecialChars(const string &text) {
-        for (char ch: text) {
-            if (int{ch} >= 0 && int{ch} <= 31) {
-                return true;
-            }
-        }
-        return false;
-    }
+    static bool ContainsSpecialChars(const string &text);
 
     vector<string> SplitIntoWordsNoStop(const string &text) const;
 
@@ -165,8 +153,3 @@ vector<Document> SearchServer::FindAllDocuments(
     }
     return matched_documents;
 }
-
-
-void AddDocument(SearchServer &search_server, int document_id,
-                 const string &document, DocumentStatus status,
-                 const vector<int> &ratings);

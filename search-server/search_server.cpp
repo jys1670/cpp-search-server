@@ -92,6 +92,24 @@ int SearchServer::ComputeAverageRating(const vector<int> &ratings) {
            static_cast<int>(ratings.size());
 }
 
+double SearchServer::ComputeWordInvDocFreq(const string &word) const {
+    double docs_with_word = word_to_docs_freq_.at(word).size();
+    return log(total_docs_ / docs_with_word);
+}
+
+bool SearchServer::IsStopWord(const string &word) const {
+    return stop_words_.count(word) > 0;
+}
+
+bool SearchServer::ContainsSpecialChars(const string &text) {
+    for (char ch: text) {
+        if (int{ch} >= 0 && int{ch} <= 31) {
+            return true;
+        }
+    }
+    return false;
+}
+
 vector<string> SearchServer::SplitIntoWordsNoStop(const string &text) const {
     vector<string> words;
     for (const string &word: SplitIntoWords(text)) {
@@ -128,16 +146,4 @@ optional<SearchServer::Query> SearchServer::ParseQuery(
         }
     }
     return optional<SearchServer::Query>{query};
-}
-
-
-void AddDocument(SearchServer &search_server, int document_id,
-                 const string &document, DocumentStatus status,
-                 const vector<int> &ratings) {
-    try {
-        search_server.AddDocument(document_id, document, status, ratings);
-    } catch (const exception &e) {
-        cout << "Ошибка добавления документа "s << document_id << ": "s << e.what()
-             << endl;
-    }
 }
