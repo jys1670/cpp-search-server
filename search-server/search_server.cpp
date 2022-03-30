@@ -34,9 +34,10 @@ void SearchServer::AddDocument(int document_id, const string &document,
     const double inv_freq = 1.0 / words.size();
     for (const auto &word: words) {
         word_to_docs_freq_[word][document_id] += inv_freq;
+        doc_to_words_freq_[document_id][word] += inv_freq;
     }
     documents_[document_id] = {ComputeAverageRating(ratings), status};
-    documents_ids_.push_back(document_id);
+    documents_ids_.insert(document_id);
 }
 
 vector<Document> SearchServer::FindTopDocuments(
@@ -146,4 +147,23 @@ optional<SearchServer::Query> SearchServer::ParseQuery(
         }
     }
     return optional<SearchServer::Query>{query};
+}
+
+const map<string, double> &SearchServer::GetWordFrequencies(int document_id) const {
+    const auto result = doc_to_words_freq_.find(document_id);
+    if (result == doc_to_words_freq_.end()) {
+        const static map<string, double> tmp;
+        return tmp;
+    }
+    return doc_to_words_freq_.at(document_id);
+}
+
+void SearchServer::RemoveDocument(int document_id) {
+    for (auto&[word, _]: doc_to_words_freq_[document_id]) {
+        word_to_docs_freq_[word].erase(document_id);
+    }
+    doc_to_words_freq_.erase(document_id);
+    documents_.erase(document_id);
+    documents_ids_.erase(document_id);
+    --total_docs_;
 }

@@ -42,12 +42,17 @@ public:
 
     int GetDocumentCount() const { return total_docs_; }
 
-    int GetDocumentId(int num) const {
-        if (num < 0 || num >= total_docs_) {
-            throw out_of_range("Incorrect document number");
-        }
-        return documents_ids_.at(num);
+    const map<string, double>& GetWordFrequencies(int document_id) const;
+
+    void RemoveDocument(int document_id);
+
+    auto begin() const {
+        return documents_ids_.begin();
     }
+    auto end() const {
+        return documents_ids_.end();
+    }
+
 
 private:
     struct DocumentData {
@@ -64,9 +69,10 @@ private:
         set<string> minus_words;
     };
     map<string, map<int, double>> word_to_docs_freq_;
+    map<int, map<string, double>> doc_to_words_freq_;
     map<int, DocumentData> documents_;
-    vector<int> documents_ids_;
     set<string> stop_words_;
+    set<int> documents_ids_;
     int total_docs_ = 0;
 
     static int ComputeAverageRating(const vector<int> &ratings);
