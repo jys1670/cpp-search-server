@@ -46,96 +46,39 @@ public:
 
   template <typename StringAlikeObject>
   [[nodiscard]] vector<Document>
-  FindTopDocuments(StringAlikeObject raw_query,
-                   DocumentStatus allowed_status) const;
-
-  template <typename StringAlikeObject, typename DocumentFilter>
-  [[nodiscard]] vector<Document>
-  FindTopDocuments(StringAlikeObject raw_query,
-                   DocumentFilter doc_filter) const;
-
-  template <typename StringAlikeObject>
-  [[nodiscard]] vector<Document>
   FindTopDocuments(const execution::sequenced_policy &,
                    StringAlikeObject raw_query) const;
-
-  template <typename StringAlikeObject, typename DocumentFilter>
-  [[nodiscard]] vector<Document>
-  FindTopDocuments(const execution::sequenced_policy &,
-                   StringAlikeObject raw_query,
-                   DocumentFilter doc_filter) const;
-
-  template <typename DocumentFilter>
-  [[nodiscard]] vector<Document>
-  FindTopDocuments(const execution::sequenced_policy &, string_view raw_query,
-                   DocumentFilter doc_filter) const;
 
   template <typename StringAlikeObject>
   [[nodiscard]] vector<Document>
   FindTopDocuments(const execution::parallel_policy &,
                    StringAlikeObject raw_query) const;
 
-  template <typename StringAlikeObject>
-  [[nodiscard]] vector<Document>
-  FindTopDocuments(const execution::parallel_policy &,
-                   StringAlikeObject raw_query,
-                   DocumentStatus allowed_status) const;
-
   template <typename StringAlikeObject, typename DocumentFilter>
   [[nodiscard]] vector<Document>
-  FindTopDocuments(const execution::parallel_policy &,
-                   StringAlikeObject raw_query,
+  FindTopDocuments(StringAlikeObject raw_query,
                    DocumentFilter doc_filter) const;
 
-  template <typename DocumentFilter>
+  template <typename ExecPolicy, typename StringAlikeObject,
+            typename DocumentFilter>
   [[nodiscard]] vector<Document>
-  FindTopDocuments(const execution::parallel_policy &, string_view raw_query,
+  FindTopDocuments(ExecPolicy &, StringAlikeObject raw_query,
                    DocumentFilter doc_filter) const;
 
   // ---------------------------------------------
 
-  [[nodiscard]] tuple<vector<string>, DocumentStatus>
-  MatchDocument(const char *raw_query, int document_id) const;
-
-  [[nodiscard]] tuple<vector<string>, DocumentStatus>
-  MatchDocument(string &&raw_query, int document_id) const;
-
+  template <typename StringAlikeObject>
   [[nodiscard]] tuple<vector<string_view>, DocumentStatus>
-  MatchDocument(const string &raw_query, int document_id) const;
+  MatchDocument(StringAlikeObject raw_query, int document_id) const;
 
+  template <typename StringAlikeObject>
   [[nodiscard]] tuple<vector<string_view>, DocumentStatus>
-  MatchDocument(string_view raw_query, int document_id) const;
+  MatchDocument(const execution::sequenced_policy &,
+                StringAlikeObject raw_query, int document_id) const;
 
-  [[nodiscard]] tuple<vector<string>, DocumentStatus>
-  MatchDocument(const execution::sequenced_policy &, const char *raw_query,
-                int document_id) const;
-
-  [[nodiscard]] tuple<vector<string>, DocumentStatus>
-  MatchDocument(const execution::sequenced_policy &, string &&raw_query,
-                int document_id) const;
-
+  template <typename StringAlikeObject>
   [[nodiscard]] tuple<vector<string_view>, DocumentStatus>
-  MatchDocument(const execution::sequenced_policy &, const string &raw_query,
-                int document_id) const;
-
-  [[nodiscard]] tuple<vector<string_view>, DocumentStatus>
-  MatchDocument(const execution::sequenced_policy &, string_view raw_query,
-                int document_id) const;
-
-  [[nodiscard]] tuple<vector<string>, DocumentStatus>
-  MatchDocument(const execution::parallel_policy &, const char *raw_query,
-                int document_id) const;
-
-  [[nodiscard]] tuple<vector<string>, DocumentStatus>
-  MatchDocument(const execution::parallel_policy &, string &&raw_query,
-                int document_id) const;
-
-  [[nodiscard]] tuple<vector<string_view>, DocumentStatus>
-  MatchDocument(const execution::parallel_policy &, const string &raw_query,
-                int document_id) const;
-
-  [[nodiscard]] tuple<vector<string_view>, DocumentStatus>
-  MatchDocument(const execution::parallel_policy &, string_view raw_query,
+  MatchDocument(const execution::parallel_policy &, StringAlikeObject raw_query,
                 int document_id) const;
 
   // ---------------------------------------------
@@ -158,7 +101,9 @@ private:
   struct DocumentData {
     int rating;
     DocumentStatus status;
+    string document;
   };
+
   struct QueryWord {
     string_view data;
     bool is_minus;
@@ -166,16 +111,11 @@ private:
   };
 
   struct Query {
-    set<string_view> plus_words{};
-    set<string_view> minus_words{};
-  };
-
-  struct PQuery {
     vector<string_view> plus_words{};
     vector<string_view> minus_words{};
   };
 
-  map<string, map<int, double>, less<>> word_to_docs_freq_;
+  map<string_view, map<int, double>> word_to_docs_freq_;
   map<int, map<string_view, double>> doc_to_words_freq_;
   map<int, DocumentData> documents_;
   set<string, less<>> stop_words_;
@@ -194,15 +134,7 @@ private:
 
   QueryWord ParseQueryWord(string_view text) const;
 
-  optional<Query> ParseQuery(const string &text) const;
-
   optional<Query> ParseQuery(string_view text) const;
-
-  optional<PQuery> ParseQuery(execution::parallel_policy,
-                              const string &text) const;
-
-  optional<PQuery> ParseQuery(execution::parallel_policy,
-                              string_view text) const;
 
   template <typename DocumentFilter>
   vector<Document> FindAllDocuments(const Query &query,
@@ -215,7 +147,7 @@ private:
 
   template <typename DocumentFilter>
   vector<Document> FindAllDocuments(const execution::parallel_policy &,
-                                    PQuery &query,
+                                    Query &query,
                                     DocumentFilter doc_filter) const;
 };
 
@@ -241,139 +173,64 @@ void SearchServer::AddDocument(int document_id, StringAlikeObject document,
 template <typename StringAlikeObject>
 vector<Document>
 SearchServer::FindTopDocuments(StringAlikeObject raw_query) const {
-  try {
-    return FindTopDocuments(raw_query, DocumentStatus::ACTUAL);
-  } catch (invalid_argument &err) {
-    throw err;
-  }
+  return FindTopDocuments(raw_query, DocumentStatus::ACTUAL);
 }
 
-template <typename StringAlikeObject>
-vector<Document>
+template <typename StringAlikeObject, typename DocumentFilter>
+[[nodiscard]] vector<Document>
 SearchServer::FindTopDocuments(StringAlikeObject raw_query,
-                               DocumentStatus allowed_status) const {
-  try {
+                               DocumentFilter doc_filter) const {
+  constexpr bool is_status = is_same_v<decay_t<DocumentFilter>, DocumentStatus>;
+  if constexpr (is_status) {
     return FindTopDocuments(
         execution::seq, string_view{raw_query},
-        [allowed_status](int document_id, DocumentStatus status, int rating) {
-          return status == allowed_status;
+        [doc_filter](int document_id, DocumentStatus status, int rating) {
+          return status == doc_filter;
         });
-  } catch (invalid_argument &err) {
-    throw err;
   }
-}
-
-template <typename StringAlikeObject, typename DocumentFilter>
-[[nodiscard]] vector<Document>
-SearchServer::FindTopDocuments(StringAlikeObject raw_query,
-                               DocumentFilter doc_filter) const {
-  try {
-    return FindTopDocuments(execution::seq, string_view{raw_query}, doc_filter);
-  } catch (invalid_argument &err) {
-    throw err;
-  }
+  return FindTopDocuments(execution::seq, string_view{raw_query}, doc_filter);
 }
 
 template <typename StringAlikeObject>
 [[nodiscard]] vector<Document>
 SearchServer::FindTopDocuments(const execution::sequenced_policy &,
                                StringAlikeObject raw_query) const {
-  try {
-    return FindTopDocuments(raw_query);
-  } catch (invalid_argument &err) {
-    throw err;
-  }
-}
-
-template <typename StringAlikeObject, typename DocumentFilter>
-[[nodiscard]] vector<Document>
-SearchServer::FindTopDocuments(const execution::sequenced_policy &,
-                               StringAlikeObject raw_query,
-                               DocumentFilter doc_filter) const {
-  try {
-    return FindTopDocuments(raw_query, doc_filter);
-  } catch (invalid_argument &err) {
-    throw err;
-  }
-}
-
-template <typename DocumentFilter>
-vector<Document>
-SearchServer::FindTopDocuments(const execution::sequenced_policy &pol,
-                               string_view raw_query,
-                               DocumentFilter doc_filter) const {
-  optional<Query> query = ParseQuery(raw_query);
-  if (ContainsSpecialChars(raw_query) || !query) {
-    throw invalid_argument("Incorrect search query");
-  }
-  auto matched_documents = FindAllDocuments(*query, doc_filter);
-  sort(matched_documents.begin(), matched_documents.end(),
-       [](const Document &lhs, const Document &rhs) {
-         if (abs(rhs.relevance - lhs.relevance) < RELEVANCE_PRECISION) {
-           return lhs.rating > rhs.rating;
-         }
-         return lhs.relevance > rhs.relevance;
-       });
-
-  if (matched_documents.size() > MAX_RESULT_DOCUMENT_COUNT) {
-    matched_documents.resize(MAX_RESULT_DOCUMENT_COUNT);
-  }
-  return matched_documents;
+  return FindTopDocuments(raw_query);
 }
 
 template <typename StringAlikeObject>
 [[nodiscard]] vector<Document>
-SearchServer::FindTopDocuments(const execution::parallel_policy &pol,
+SearchServer::FindTopDocuments(const execution::parallel_policy &policy,
                                StringAlikeObject raw_query) const {
-  try {
-    return FindTopDocuments(
-        pol, string_view{raw_query},
-        [](int document_id, DocumentStatus status, int rating) {
-          return status == DocumentStatus::ACTUAL;
-        });
-  } catch (invalid_argument &err) {
-    throw err;
-  }
+  return FindTopDocuments(
+      policy, string_view{raw_query},
+      [](int document_id, DocumentStatus status, int rating) {
+        return status == DocumentStatus::ACTUAL;
+      });
 }
 
-template <typename StringAlikeObject>
-[[nodiscard]] vector<Document>
-SearchServer::FindTopDocuments(const execution::parallel_policy &pol,
-                               StringAlikeObject raw_query,
-                               DocumentStatus allowed_status) const {
-  try {
-    return FindTopDocuments(
-        pol, string_view{raw_query},
-        [allowed_status](int document_id, DocumentStatus status, int rating) {
-          return status == allowed_status;
-        });
-  } catch (invalid_argument &err) {
-    throw err;
-  }
-}
-
-template <typename StringAlikeObject, typename DocumentFilter>
-[[nodiscard]] vector<Document>
-SearchServer::FindTopDocuments(const execution::parallel_policy &pol,
-                               StringAlikeObject raw_query,
-                               DocumentFilter doc_filter) const {
-  try {
-    return FindTopDocuments(pol, string_view{raw_query}, doc_filter);
-  } catch (invalid_argument &err) {
-    throw err;
-  }
-}
-
-template <typename DocumentFilter>
+template <typename ExecPolicy, typename StringAlikeObject,
+          typename DocumentFilter>
 vector<Document>
-SearchServer::FindTopDocuments(const execution::parallel_policy &pol,
-                               string_view raw_query,
+SearchServer::FindTopDocuments(ExecPolicy &policy, StringAlikeObject raw_query,
                                DocumentFilter doc_filter) const {
-  optional<PQuery> query = ParseQuery(pol, raw_query);
-  if (ContainsSpecialChars(raw_query) || !query) {
+  optional<Query> query = ParseQuery(string_view{raw_query});
+  if (ContainsSpecialChars(string_view{raw_query}) || !query) {
     throw invalid_argument("Incorrect search query");
   }
-  auto matched_documents = FindAllDocuments(pol, *query, doc_filter);
+
+  vector<Document> matched_documents{};
+  constexpr bool is_status = is_same_v<decay_t<DocumentFilter>, DocumentStatus>;
+  if constexpr (is_status) {
+    matched_documents = FindAllDocuments(
+        policy, *query,
+        [doc_filter](int document_id, DocumentStatus status, int rating) {
+          return status == doc_filter;
+        });
+  } else {
+    matched_documents = FindAllDocuments(policy, *query, doc_filter);
+  }
+
   sort(matched_documents.begin(), matched_documents.end(),
        [](const Document &lhs, const Document &rhs) {
          if (abs(rhs.relevance - lhs.relevance) < RELEVANCE_PRECISION) {
@@ -404,12 +261,14 @@ SearchServer::FindAllDocuments(const execution::sequenced_policy &,
   map<int, double> doc_to_relev;
   set<int> bad_docs;
   for (const auto &[word, docs] : word_to_docs_freq_) {
-    if (query.minus_words.count(word)) { // Minus word, ignore document
+    if (binary_search(query.minus_words.begin(), query.minus_words.end(),
+                      word)) { // Minus word, ignore document
       for (auto &[id, _] : docs)
         bad_docs.insert(id);
       continue;
     }
-    if (query.plus_words.count(word)) { // Good word, compute relevance
+    if (binary_search(query.plus_words.begin(), query.plus_words.end(),
+                      word)) { // Good word, compute relevance
       double inv_doc_freq = ComputeWordInvDocFreq(word);
       for (const auto &[id, term_freq] : docs) {
         if (doc_filter(id, documents_.at(id).status,
@@ -433,19 +292,14 @@ SearchServer::FindAllDocuments(const execution::sequenced_policy &,
 
 template <typename DocumentFilter>
 vector<Document>
-SearchServer::FindAllDocuments(const execution::parallel_policy &pol,
-                               SearchServer::PQuery &query,
+SearchServer::FindAllDocuments(const execution::parallel_policy &policy,
+                               SearchServer::Query &query,
                                DocumentFilter doc_filter) const {
 
   vector<Document> matched_documents;
   ConcurrentMap<int, double> doc_to_relev_par{100};
 
-  sort(query.plus_words.begin(), query.plus_words.end());
-  query.plus_words.erase(
-      unique(query.plus_words.begin(), query.plus_words.end()),
-      query.plus_words.end());
-
-  for_each(pol, query.plus_words.begin(), query.plus_words.end(),
+  for_each(policy, query.plus_words.begin(), query.plus_words.end(),
            [&](const auto word) {
              const auto it = word_to_docs_freq_.find(word);
              if (it != word_to_docs_freq_.end()) {
@@ -460,7 +314,7 @@ SearchServer::FindAllDocuments(const execution::parallel_policy &pol,
              }
            });
 
-  for_each(pol, query.minus_words.begin(), query.minus_words.end(),
+  for_each(policy, query.minus_words.begin(), query.minus_words.end(),
            [&](const auto word) {
              const auto it = word_to_docs_freq_.find(word);
              if (it != word_to_docs_freq_.end()) {
@@ -477,4 +331,78 @@ SearchServer::FindAllDocuments(const execution::parallel_policy &pol,
   }
 
   return matched_documents;
+}
+
+template <typename StringAlikeObject>
+tuple<vector<string_view>, DocumentStatus>
+SearchServer::MatchDocument(StringAlikeObject raw_query,
+                            int document_id) const {
+  auto query = ParseQuery(string_view{raw_query});
+  if (ContainsSpecialChars(raw_query) || !query) {
+    throw invalid_argument("Incorrect search query");
+  }
+  set<string_view> words;
+  for (const auto &[word, docs] : word_to_docs_freq_) {
+    if (!docs.count(document_id)) { // no such word in document
+      continue;
+    }
+    if (binary_search(query->minus_words.begin(), query->minus_words.end(),
+                      word)) { // minus word found in query
+      return {vector<string_view>(), documents_.at(document_id).status};
+    }
+    if (binary_search(query->plus_words.begin(), query->plus_words.end(),
+                      word)) { // normal word found in query
+      words.insert(word);
+    }
+  }
+  vector<string_view> words_vector(words.begin(), words.end());
+  sort(words_vector.begin(), words_vector.end());
+  return {words_vector, documents_.at(document_id).status};
+}
+
+template <typename StringAlikeObject>
+tuple<vector<string_view>, DocumentStatus>
+SearchServer::MatchDocument(const execution::sequenced_policy &,
+                            StringAlikeObject raw_query,
+                            int document_id) const {
+  return MatchDocument(string_view{raw_query}, document_id);
+}
+
+template <typename StringAlikeObject>
+tuple<vector<string_view>, DocumentStatus>
+SearchServer::MatchDocument(const execution::parallel_policy &,
+                            StringAlikeObject raw_query,
+                            int document_id) const {
+  auto query = ParseQuery(execution::par, raw_query);
+  if (ContainsSpecialChars(raw_query) || !query) {
+    throw invalid_argument("Incorrect search query");
+  }
+  vector<string_view> &mwords = query->minus_words, &pwords = query->plus_words;
+
+  if (any_of(execution::par, mwords.begin(), mwords.end(),
+             [this, document_id](string_view word) {
+               auto it = word_to_docs_freq_.find(word);
+               if (it != word_to_docs_freq_.end()) {
+                 return bool((*it).second.count(document_id));
+               }
+               return false;
+             })) {
+    return {vector<string_view>(), documents_.at(document_id).status};
+  }
+
+  for_each(execution::par, pwords.begin(), pwords.end(),
+           [this, &document_id](string_view &word) {
+             auto it = word_to_docs_freq_.find(word);
+             if (!(it != word_to_docs_freq_.end() &&
+                   (*it).second.count(document_id))) {
+               word = "";
+             }
+           });
+
+  sort(pwords.begin(), pwords.end());
+  pwords.erase(unique(pwords.begin(), pwords.end()), pwords.end());
+  if (pwords.front().empty()) {
+    pwords.erase(query->plus_words.begin());
+  }
+  return {pwords, documents_.at(document_id).status};
 }

@@ -3,8 +3,4 @@
 #include <string>
 #include <vector>
 
-using namespace std;
-
-vector<string> SplitIntoWords(const string &text);
-
-vector<string_view> SplitIntoWordsView(string_view str);
+std::vector<std::string_view> SplitIntoWords(std::string_view str);
