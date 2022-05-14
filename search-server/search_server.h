@@ -67,23 +67,25 @@ public:
 
   // ---------------------------------------------
 
-  template <typename StringAlikeObject>
-  [[nodiscard]] tuple<vector<string_view>, DocumentStatus>
-  MatchDocument(StringAlikeObject raw_query, int document_id) const;
+  using WordsAndStatus = tuple<vector<string_view>, DocumentStatus>;
 
   template <typename StringAlikeObject>
-  [[nodiscard]] tuple<vector<string_view>, DocumentStatus>
+  [[nodiscard]] WordsAndStatus MatchDocument(StringAlikeObject raw_query,
+                                             int document_id) const;
+
+  template <typename StringAlikeObject>
+  [[nodiscard]] WordsAndStatus
   MatchDocument(const execution::sequenced_policy &,
                 StringAlikeObject raw_query, int document_id) const;
 
   template <typename StringAlikeObject>
-  [[nodiscard]] tuple<vector<string_view>, DocumentStatus>
-  MatchDocument(const execution::parallel_policy &, StringAlikeObject raw_query,
-                int document_id) const;
+  [[nodiscard]] WordsAndStatus MatchDocument(const execution::parallel_policy &,
+                                             StringAlikeObject raw_query,
+                                             int document_id) const;
 
   // ---------------------------------------------
 
-  [[nodiscard]] int GetDocumentCount() const { return total_docs_; }
+  [[nodiscard]] int GetDocumentCount() const { return documents_.size(); }
 
   [[nodiscard]] const map<string_view, double> &
   GetWordFrequencies(int document_id) const;
@@ -120,7 +122,6 @@ private:
   map<int, DocumentData> documents_;
   set<string, less<>> stop_words_;
   set<int> documents_ids_;
-  int total_docs_ = 0;
 
   static int ComputeAverageRating(const vector<int> &ratings);
 
@@ -134,7 +135,7 @@ private:
 
   QueryWord ParseQueryWord(string_view text) const;
 
-  optional<Query> ParseQuery(string_view text) const;
+  Query ParseQuery(string_view text) const;
 
   template <typename DocumentFilter>
   vector<Document> FindAllDocuments(const Query &query,
@@ -214,21 +215,17 @@ template <typename ExecPolicy, typename StringAlikeObject,
 vector<Document>
 SearchServer::FindTopDocuments(ExecPolicy &policy, StringAlikeObject raw_query,
                                DocumentFilter doc_filter) const {
-  optional<Query> query = ParseQuery(string_view{raw_query});
-  if (ContainsSpecialChars(string_view{raw_query}) || !query) {
-    throw invalid_argument("Incorrect search query");
-  }
-
+  Query query = ParseQuery(string_view{raw_query});
   vector<Document> matched_documents{};
   constexpr bool is_status = is_same_v<decay_t<DocumentFilter>, DocumentStatus>;
   if constexpr (is_status) {
     matched_documents = FindAllDocuments(
-        policy, *query,
+        policy, query,
         [doc_filter](int document_id, DocumentStatus status, int rating) {
           return status == doc_filter;
         });
   } else {
-    matched_documents = FindAllDocuments(policy, *query, doc_filter);
+    matched_documents = FindAllDocuments(policy, query, doc_filter);
   }
 
   sort(matched_documents.begin(), matched_documents.end(),
@@ -334,23 +331,20 @@ SearchServer::FindAllDocuments(const execution::parallel_policy &policy,
 }
 
 template <typename StringAlikeObject>
-tuple<vector<string_view>, DocumentStatus>
+SearchServer::WordsAndStatus
 SearchServer::MatchDocument(StringAlikeObject raw_query,
                             int document_id) const {
-  auto query = ParseQuery(string_view{raw_query});
-  if (ContainsSpecialChars(raw_query) || !query) {
-    throw invalid_argument("Incorrect search query");
-  }
+  Query query = ParseQuery(string_view{raw_query});
   set<string_view> words;
   for (const auto &[word, docs] : word_to_docs_freq_) {
     if (!docs.count(document_id)) { // no such word in document
       continue;
     }
-    if (binary_search(query->minus_words.begin(), query->minus_words.end(),
+    if (binary_search(query.minus_words.begin(), query.minus_words.end(),
                       word)) { // minus word found in query
       return {vector<string_view>(), documents_.at(document_id).status};
     }
-    if (binary_search(query->plus_words.begin(), query->plus_words.end(),
+    if (binary_search(query.plus_words.begin(), query.plus_words.end(),
                       word)) { // normal word found in query
       words.insert(word);
     }
@@ -361,7 +355,7 @@ SearchServer::MatchDocument(StringAlikeObject raw_query,
 }
 
 template <typename StringAlikeObject>
-tuple<vector<string_view>, DocumentStatus>
+SearchServer::WordsAndStatus
 SearchServer::MatchDocument(const execution::sequenced_policy &,
                             StringAlikeObject raw_query,
                             int document_id) const {
@@ -369,15 +363,12 @@ SearchServer::MatchDocument(const execution::sequenced_policy &,
 }
 
 template <typename StringAlikeObject>
-tuple<vector<string_view>, DocumentStatus>
+SearchServer::WordsAndStatus
 SearchServer::MatchDocument(const execution::parallel_policy &,
                             StringAlikeObject raw_query,
                             int document_id) const {
-  auto query = ParseQuery(execution::par, raw_query);
-  if (ContainsSpecialChars(raw_query) || !query) {
-    throw invalid_argument("Incorrect search query");
-  }
-  vector<string_view> &mwords = query->minus_words, &pwords = query->plus_words;
+  Query query = ParseQuery(string_view{raw_query});
+  vector<string_view> &mwords = query.minus_words, &pwords = query.plus_words;
 
   if (any_of(execution::par, mwords.begin(), mwords.end(),
              [this, document_id](string_view word) {
@@ -402,7 +393,7 @@ SearchServer::MatchDocument(const execution::parallel_policy &,
   sort(pwords.begin(), pwords.end());
   pwords.erase(unique(pwords.begin(), pwords.end()), pwords.end());
   if (pwords.front().empty()) {
-    pwords.erase(query->plus_words.begin());
+    pwords.erase(query.plus_words.begin());
   }
   return {pwords, documents_.at(document_id).status};
 }

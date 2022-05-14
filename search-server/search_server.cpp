@@ -43,7 +43,6 @@ void SearchServer::AddDocument(int document_id, string_view document,
       documents_.count(document_id) > 0) {
     throw invalid_argument("Either document ID or content is incorrect");
   }
-  ++total_docs_;
   documents_[document_id] = {ComputeAverageRating(ratings), status,
                              string{document}};
   documents_ids_.insert(document_id);
@@ -67,7 +66,7 @@ int SearchServer::ComputeAverageRating(const vector<int> &ratings) {
 
 double SearchServer::ComputeWordInvDocFreq(string_view word) const {
   double docs_with_word = word_to_docs_freq_.at(word).size();
-  return log(total_docs_ / docs_with_word);
+  return log(documents_.size() / docs_with_word);
 }
 
 bool SearchServer::IsStopWord(string_view word) const {
@@ -102,12 +101,15 @@ SearchServer::QueryWord SearchServer::ParseQueryWord(string_view text) const {
   return {text, is_minus, IsStopWord(text)};
 }
 
-optional<SearchServer::Query> SearchServer::ParseQuery(string_view text) const {
+SearchServer::Query SearchServer::ParseQuery(string_view text) const {
+  if (ContainsSpecialChars(text)) {
+    throw invalid_argument("Incorrect search query");
+  }
   Query query;
   for (string_view word : SplitIntoWords(text)) {
     const QueryWord query_word = ParseQueryWord(word);
     if (query_word.data.empty() || query_word.data[0] == '-') {
-      return nullopt;
+      throw invalid_argument("Incorrect search query");
     }
     if (!query_word.is_stop) {
       if (query_word.is_minus) {
@@ -125,7 +127,7 @@ optional<SearchServer::Query> SearchServer::ParseQuery(string_view text) const {
   query.plus_words.erase(
       unique(query.plus_words.begin(), query.plus_words.end()),
       query.plus_words.end());
-  return optional<SearchServer::Query>{move(query)};
+  return query;
 }
 
 const map<string_view, double> &
@@ -145,7 +147,6 @@ void SearchServer::RemoveDocument(int document_id) {
   doc_to_words_freq_.erase(document_id);
   documents_.erase(document_id);
   documents_ids_.erase(document_id);
-  --total_docs_;
 }
 
 void SearchServer::RemoveDocument(execution::sequenced_policy,
@@ -167,5 +168,4 @@ void SearchServer::RemoveDocument(execution::parallel_policy, int document_id) {
   doc_to_words_freq_.erase(document_id);
   documents_.erase(document_id);
   documents_ids_.erase(document_id);
-  --total_docs_;
 }
